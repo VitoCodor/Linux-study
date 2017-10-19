@@ -1,0 +1,148 @@
+shell脚本学习
+
+http://blog.csdn.net/deansrk/article/details/6633206
+if语句里常用到
+EQ 就是 EQUAL等于
+NQ 就是 NOT EQUAL不等于 
+GT 就是 GREATER THAN大于　 
+LT 就是 LESS THAN小于 
+GE 就是 GREATER THAN OR EQUAL 大于等于 
+LE 就是 LESS THAN OR EQUAL 小于等于
+-lt， [ $A -lt $B ]   //A是否小于B
+-le  小于或等于
+-gt  大于
+-ge  大于或等于
+-nq  等于
+-ne  不等于
+
+
+[ -z STRING ] “STRING” 的长度为零则为真。
+
+
+如何更改linux文件的拥有者及用户组(chown和chgrp): 
+http://blog.csdn.net/hudashi/article/details/7797393
+
+shell重定向&>file, 2>&1, 1>&2的区别
+http://www.360doc.com/content/13/0523/16/7044580_287544243.shtml
+shell上:
+0表示标准输入
+1表示标准输出
+2表示标准错误输出
+> 默认为标准输出重字向, 与 1> 相同
+2>&1 意思是把 标准错误输出 重定向到 标准输出
+&>file 意思是把 标准输出 和 标准错误输出 都重定向到文件file中
+
+backup_main "$1" "$2" >>"$3" 2>&1 
+意思是指, 将方法backup_main 里的输出信息(2&>1 标准错误输出 重定向到 标准输出 )
+
+
+在Linux和unix类型的系统中，shell脚本里面有重定向符号 ‘>’和‘>>’
+比如cat > test.c，这个表示向test.c文件重新添加内容，test.c文件首先被清空。
+而cat >> test.c，这个表示想test.c文件追加内容，test.c中原来的内容不会被清理掉。
+
+
+我使用过的Linux命令之dos2unix - 将DOS格式文本文件转换成UNIX格式: 
+http://codingstandards.iteye.com/blog/810900
+
+
+-s file　　　　　文件大小非0时为真
+[ -f "somefile" ] ：判断是否是一个文件
+[ -x "/bin/ls" ] ：判断/bin/ls是否存在并有可执行权限
+[ -n "$var" ] ：判断$var变量是否有值
+[ "$a" = "$b" ] ：判断$a和$b是否相等          
+-r file　　　　　用户可读为真
+-w file　　　　　用户可写为真
+-x file　　　　　用户可执行为真
+-f file　　　　　文件为正规文件为真
+-d file　　　　　文件为目录为真
+-c file　　　　　文件为字符特殊文件为真
+-b file　　　　　文件为块特殊文件为真
+-s file　　　　　文件大小非0时为真
+-t file　　　　　当文件描述符(默认为1)指定的设备为终端时为真
+-e filename  如果 filename存在，则为真  [ -e /var/log/syslog ]
+-d filename  如果 filename为目录，则为真  [ -d /tmp/mydir ]
+-f filename  如果 filename为常规文件，则为真  [ -f /usr/bin/grep ]
+-L filename  如果 filename为符号链接，则为真  [ -L /usr/bin/grep ]
+-r filename  如果 filename可读，则为真  [ -r /var/log/syslog ]
+-w filename  如果 filename可写，则为真  [ -w /var/mytmp.txt ]
+-x filename  如果 filename可执行，则为真  [ -L /usr/bin/grep ]
+
+
+
+来源: http://www.cnblogs.com/fjping0606/p/4573536.html
+Shell中IFS用法
+
+一 、IFS的介绍
+   Shell 脚本中有个变量叫IFS(Internal Field Seprator) ，内部域分隔符。完整定义是The shell uses the value stored in IFS, which is the space, tab, and newline characters by default, to delimit words for the read and set commands, when parsing output from command substitution, and when performing variable substitution.
+   Shell 的环境变量分为set, env 两种，其中 set 变量可以通过 export 工具导入到 env 变量中。其中，set 是显示设置shell变量，仅在本 shell 中有效；env 是显示设置用户环境变量 ，仅在当前会话中有效。换句话说，set 变量里包含了env 变量，但set变量不一定都是env 变量。这两种变量不同之处在于变量的作用域不同。显然，env 变量的作用域要大些，它可以在 subshell 中使用。
+   IFS 是一种 set 变量，当 shell 处理"命令替换"和"参数替换"时，shell 根据 IFS 的值，默认是 space, tab, newline 来拆解读入的变量，然后对特殊字符进行处理，最后重新组合赋值给该变量。
+二、 IFS的简单实例
+1 查看IFS的值
+echo "$IFS"
+ 
+echo "$IFS"|od -b
+0000000 040 011 012 012  
+0000004
+直接输出IFS是看不到值的，转化为二进制就可以看到了，"040"是空格，"011"是Tab，"012"是换行符"\n" 。最后一个 012 是因为 echo 默认是会换行的。
+2 实际中的应用
+#!/bin/bash
+OLD_IFS=$IFS #保存原始值
+IFS="" #改变IFS的值
+...
+...
+IFS=$OLD_IFS #还原IFS的原始值
+
+
+
+
+shell笔记-local、export用法 、declare、set
+http://www.cnblogs.com/itcomputer/p/5008164.html
+
+local一般用于局部变量声明，多在在函数内部使用。
+    1.    Shell脚本中定义的变量是global的，其作用域从被定义的地方开始，到shell结束或被显示删除的地方为止。
+    2.    Shell函数定义的变量默认是global的，其作用域从“函数被调用时执行变量定义的地方”开始，到shell结束或被显示删除处为止。函数定义的变量可以被显示定义成local的，其作用域局限于函数内。但请注意，函数的参数是local的。
+    3.    如果同名，Shell函数定义的local变量会屏蔽脚本定义的global变量。
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    export:将自定义变量设定为系统环境变量（仅限于该次登陆操作，当前shell中有效）
+    语　　法：export [-fnp][变量名称]=[变量设置值]
+    补充说明：在shell中执行程序时，shell会提供一组环境变量。export可新增，修改或删除环境变量，供后续执行的程序使用。
+    参　　数：
+        -f 　代表[变量名称]中为函数名称。
+　    -n 　删除指定的变量。变量实际上并未删除，只是不会输出到后续指令的执行环境中。
+　    -p 　列出所有的shell赋予程序的环境变量。
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Linux 指令篇：系统设置--declare  和set类似
+功能说明：声明 shell 变量。
+语　　法：declare [+/-][rxi][变量名称＝设置值] 或 declare -f
+补充说明：declare为shell指令，在第一种语法中可用来声明变量并设置变量的属性([rix]即为变量的属性），在第二种语法中可用来显示shell函数。若不加上任何参数，则会显示全部的shell变量与函数(与执行set指令的效果相同)。
+
+参　　数：
+　+/- 　"-"可用来指定变量的属性，"+"则是取消变量所设的属性。 
+　-f 　仅显示函数。 
+　r 　将变量设置为只读。 
+　x 　指定的变量会成为环境变量，可供shell以外的程序来使用。 
+　i 　[设置值]可以是数值，字符串或运算式。
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+shell中exec解析(包含source)
+http://blog.csdn.net/xyls12345/article/details/25753913
+
+
+Shell脚本中$0、$?、$!、$$、$*、$#、$@等的意义
+http://blog.csdn.net/slovyz/article/details/47400107
+
+
+shell脚本符号(``)等
+http://www.cnblogs.com/Lynn-Zhang/p/5758287.html
+
+
+shell脚本EOF使用
+http://blog.csdn.net/sprita1/article/details/42676307
+
+
+shell脚本${}等的区别, 命令替换		Linux—shell中$(( ))、$( )、``与${ }的区别
+http://blog.csdn.net/number_0_0/article/details/73291182
+
+shell脚本 linu命令有关目录栈的内容解说
+http://www.jianshu.com/p/53cccae3c443
