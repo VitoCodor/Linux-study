@@ -73,9 +73,14 @@ http://codingstandards.iteye.com/blog/810900
 Shell中IFS用法
 
 一 、IFS的介绍
-   Shell 脚本中有个变量叫IFS(Internal Field Seprator) ，内部域分隔符。完整定义是The shell uses the value stored in IFS, which is the space, tab, and newline characters by default, to delimit words for the read and set commands, when parsing output from command substitution, and when performing variable substitution.
-   Shell 的环境变量分为set, env 两种，其中 set 变量可以通过 export 工具导入到 env 变量中。其中，set 是显示设置shell变量，仅在本 shell 中有效；env 是显示设置用户环境变量 ，仅在当前会话中有效。换句话说，set 变量里包含了env 变量，但set变量不一定都是env 变量。这两种变量不同之处在于变量的作用域不同。显然，env 变量的作用域要大些，它可以在 subshell 中使用。
-   IFS 是一种 set 变量，当 shell 处理"命令替换"和"参数替换"时，shell 根据 IFS 的值，默认是 space, tab, newline 来拆解读入的变量，然后对特殊字符进行处理，最后重新组合赋值给该变量。
+   Shell 脚本中有个变量叫IFS(Internal Field Seprator) ，内部域分隔符。完整定义是The shell uses the value stored in IFS, 
+   which is the space, tab, and newline characters by default, to delimit words for the read and set commands, 
+   when parsing output from command substitution, and when performing variable substitution.
+   Shell 的环境变量分为set, env 两种，其中 set 变量可以通过 export 工具导入到 env 变量中。其中，set 是显示设置shell变量，仅在本 shell 中有效；
+   env 是显示设置用户环境变量 ，仅在当前会话中有效。换句话说，set 变量里包含了env 变量，但set变量不一定都是env 变量。
+   这两种变量不同之处在于变量的作用域不同。显然，env 变量的作用域要大些，它可以在 subshell 中使用。
+   IFS 是一种 set 变量，当 shell 处理"命令替换"和"参数替换"时，shell 根据 IFS 的值，默认是 space, tab, newline 来拆解读入的变量，
+   然后对特殊字符进行处理，最后重新组合赋值给该变量。
 二、 IFS的简单实例
 1 查看IFS的值
 echo "$IFS"
@@ -100,7 +105,8 @@ http://www.cnblogs.com/itcomputer/p/5008164.html
 
 local一般用于局部变量声明，多在在函数内部使用。
     1.    Shell脚本中定义的变量是global的，其作用域从被定义的地方开始，到shell结束或被显示删除的地方为止。
-    2.    Shell函数定义的变量默认是global的，其作用域从“函数被调用时执行变量定义的地方”开始，到shell结束或被显示删除处为止。函数定义的变量可以被显示定义成local的，其作用域局限于函数内。但请注意，函数的参数是local的。
+    2.    Shell函数定义的变量默认是global的，其作用域从“函数被调用时执行变量定义的地方”开始，到shell结束或被显示删除处为止。
+          函数定义的变量可以被显示定义成local的，其作用域局限于函数内。但请注意，函数的参数是local的。
     3.    如果同名，Shell函数定义的local变量会屏蔽脚本定义的global变量。
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     export:将自定义变量设定为系统环境变量（仅限于该次登陆操作，当前shell中有效）
@@ -114,7 +120,8 @@ local一般用于局部变量声明，多在在函数内部使用。
 Linux 指令篇：系统设置--declare  和set类似
 功能说明：声明 shell 变量。
 语　　法：declare [+/-][rxi][变量名称＝设置值] 或 declare -f
-补充说明：declare为shell指令，在第一种语法中可用来声明变量并设置变量的属性([rix]即为变量的属性），在第二种语法中可用来显示shell函数。若不加上任何参数，则会显示全部的shell变量与函数(与执行set指令的效果相同)。
+补充说明：declare为shell指令，在第一种语法中可用来声明变量并设置变量的属性([rix]即为变量的属性），在第二种语法中可用来显示shell函数。
+         若不加上任何参数，则会显示全部的shell变量与函数(与执行set指令的效果相同)。
 
 参　　数：
 　+/- 　"-"可用来指定变量的属性，"+"则是取消变量所设的属性。 
