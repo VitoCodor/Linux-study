@@ -1,0 +1,494 @@
+#include <stdio.h>
+#include <sstream>
+#include <iostream>
+#include <fstream>
+#include "mysqlManager.h"
+#include "../voicechannel_api.h"
+#include "../audioservice_api.h"
+#include "security-c/include/securec.h"
+#include "platform/modules/encryption/encryption_ex.hpp"
+
+
+#define MAX_NUMBER_LEN 20
+#define STRING_SIZE 50
+#define TEXT_SIZE 10000
+using namespace ubp::platform::encryption;
+
+mysqlManager* mysqlManager::mysql_pInstance;
+bool mysqlManager::isconnect;
+Encryption* encryption;
+
+Encryption* getEncrypt()
+{
+	if(encryption == NULL)
+		encryption = new EncryptionEx();
+	return encryption;
+}
+
+
+// offer encrypte plaintext to ciphertext
+int encrypt(char* plaintext, char* ciphertext)
+{
+	Encryption* encryption=getEncrypt();
+	encryption->LocalEncryptOld(plaintext, ciphertext);
+	return SUCCESS;	
+}
+// offer decrypte ciphertext to plaintext
+int decrypt(char* ciphertext, char* plaintext)
+{
+	Encryption* encryption=getEncrypt();
+	encryption->LocalDecryptOld(ciphertext, plaintext);
+	return SUCCESS;	
+}
+
+mysqlManager::mysqlManager(void)
+{
+	result=NULL;
+	row=NULL;
+	field=NULL;
+	isconnect=false;
+	setPassword();
+	mysqlManager_init();
+}
+
+/*
+** set password to the private parameter
+**
+** read the config file: digitalaudiodbconfig.xml, find the element <dbPass>
+** get the value of the element <dbPass>
+** decryption the value, and set the private.
+*/
+int mysqlManager::setPassword()
+{
+	ifstream read("/opt/ubp_websvc/digitalaudiodbconfig.xml");
+    if(!read.is_open())
+    {
+		gw_error("/opt/ubp_websvc/digitalaudiodbconfig.xml is not exist!");
+        return NULL; 
+    }
+    string result,dbpass,endstr;
+    dbpass="<dbPass>";
+    endstr="</db";
+	string pwd;
+    int begin, end, len=dbpass.length();
+    while(getline(read, result))
+    {
+        if( std::string::npos != result.find(dbpass)){
+            begin=result.find(dbpass) + len;
+            end = result.find(endstr);
+			pwd=(result.substr(begin,(end-begin)));
+			char out[100];
+			decrypt((char*)pwd.c_str(), out);
+			dcpwd=out;
+        }
+    }
+	read.close();
+	if(NULL == dcpwd.c_str())
+		gw_warn("Get the decryption password failed!");
+	else
+		gw_warn("Get the decryption password success.");
+	return SUCCESS;
+}
+
+mysqlManager::~mysqlManager(void)
+{
+	mysql_close(&mysql); 
+}
+
+mysqlManager* mysqlManager::getInstance()
+{
+	if(mysql_pInstance == NULL)  //if the first get
+		mysql_pInstance = new mysqlManager();  
+	return mysql_pInstance;  
+}
+
+
+int mysqlManager::mysqlManager_init()
+{
+	if (NULL == mysql_init(&mysql)) {  
+		gw_error("mysql_init(): %s\n", mysql_error(&mysql));
+		isconnect=false;
+		return FAIL;  
+	}
+	if (NULL == mysql_real_connect(&mysql, "127.0.0.1", "odb_user", dcpwd.c_str(), "victel_digital", 3306, 0, 5)) {	
+		gw_error("mysql_real_connect(): %s", mysql_error(&mysql));
+		mysql_close(&mysql); 
+		isconnect=false;  
+		mysql_library_end();
+		return FAIL;
+	}	
+	isconnect=true;
+	gw_info("Connected MySQL successful!"); 
+	return SUCCESS;	
+}
+
+/*
+** get the connect status
+** if connect to the mysql, return true; else return false;
+*/
+bool mysqlManager::isConnect()
+{
+	return isconnect;
+}
+
+/*
+**	get the total data from login_property, put data to the mapLoginInfo
+*/
+int mysqlManager::mysqlGetloginInfo(map<string, string> &mapLoginInfo)
+{
+	const char *query_str = NULL;
+	int			rc, fields;
+	int			rows;
+
+	mapLoginInfo.clear();	//clear the loginInfo map
+	
+	query_str = "select * from login_property";
+
+	rc = mysql_real_query(&mysql, query_str, strlen(query_str));  
+	if (0 != rc) {  
+		gw_error("mysqlGetloginInfo mysql_real_query(): %s", mysql_error(&mysql));  
+		return FAIL;  
+	}else  if (0 == rc){
+		result = mysql_store_result(&mysql);
+		if (NULL == result) {  
+			gw_error("mysqlGetloginInfo mysql_restore_result(): %s", mysql_error(&mysql)); 
+			return FAIL;  
+		}
+		rows = mysql_num_rows(result);
+		if(rows <= 0) {
+			gw_error("mysqlGetloginInfo login_property is NULL"); 
+			mysql_free_result(result);
+			return FAIL;  
+		}
+		else if(rows > 1) {
+			gw_warn("mysqlGetloginInfo login_property rows %d", rows);  
+		}
+		fields = mysql_num_fields(result);
+		if(fields < 1) 
+		{
+			gw_error("table's fields is worng, please checked!");
+			return FAIL;
+		}
+		int i=0;
+		for (i=0; i<rows; i++)
+		{
+			row = mysql_fetch_row(result);
+			if(NULL == row || NULL == row[0] )break;
+			// Sure we check the values of the row[0] and row[1]???
+			if(NULL == row[1]) row[1]="";
+			mapLoginInfo.insert(pair<string, string>(row[0], row[1]));
+//			gw_warn("login_property : %s -- %s", row[0], row[1]);
+		}
+		gw_warn("mapLoginInfo length is %d", i);
+		mysql_free_result(result);
+	}
+/*	char* in_str="5DBB91D0F79EAE22EFFAE1E77A1FC3D5B9AB4B7C407F3773375CB26477AF0532244CF948BCF5AA6E2CF08E";
+	char decryptOld[100];
+	Encryption* encryption=new EncryptionEx();
+	encryption->LocalDecryptOld(in_str, decryptOld);
+	gw_warn("the in_str is : %s \n", in_str);
+	gw_warn("the decryptold is : %s ", decryptOld);
+
+	char* enStr="99900100";
+	gw_warn("test mysql encryption and decryption...");
+	char outStr[100];
+	encrypt(enStr, outStr);
+	gw_warn("test result: encryption text is : %s, plaintext is: %s", outStr, enStr);
+	gw_warn("test decryption....");
+	decrypt(in_str, outStr);
+	gw_warn("test result: encryption text is : %s, plaintext is: %s", in_str,outStr);*/
+	return SUCCESS;	
+}
+
+/*
+**	get the value from login_property table where keyfield is 'key'
+**
+**
+**	warnning:  this function is not available for big pdt_user and pdt_group
+**				pdt_user/pdt_group's keyvalue sometime is too big to set in this function
+*/
+int mysqlManager::mysqlGetlogin(std::string key, std::string &value)
+{
+	int			rc;
+	int			rows;
+	int         param_count, column_count, row_count;
+	char        str_data[STRING_SIZE];
+	char		text_data[TEXT_SIZE];
+	my_bool     is_null[2];
+	my_bool     error[2];
+	unsigned long length[2];
+	char keyfield[50]={0};
+	memcpy_s(keyfield, 50, key.c_str(), key.length()+1);
+	MYSQL_STMT* stmt=mysql_stmt_init(&mysql);	/* 创建MYSQL_STMT句柄*/
+
+	char query[1024]={'\0'};
+	memset_s(query, sizeof(query), '\0', sizeof(query));
+	memcpy_s(query, 1024, "select keyfield, keyvalue from login_property where keyfield=?", sizeof("select keyfield, keyvalue from login_property where keyfield=?"));
+			
+	//char *query = "select keyfield, keyvalue from login_property where keyfield=?";
+	if(0 != mysql_stmt_prepare(stmt, query, strlen(query)))
+	{
+		gw_error("mysqlGetlogin--Run mysql_stmt_prepare failed, running sql_prepare is : %s.", query);
+		if (mysql_stmt_close(stmt))
+				gw_error("mysqlGetlogin--failed while closing the statement\n%s\n", mysql_error(&mysql));
+		return FAIL;
+	}
+	param_count= mysql_stmt_param_count(stmt);
+	if ( param_count != 1)
+	{
+		gw_error("mysqlGetlogin--invalid parameter count returned by MySQL");
+		if (mysql_stmt_close(stmt))
+				gw_error("mysqlGetlogin--failed while closing the statement\n%s\n", mysql_error(&mysql));
+		return FAIL;
+	}
+
+	MYSQL_BIND params[1];
+
+	memset_s(params, sizeof(params), 0, sizeof(params));
+
+	params[0].buffer_type = MYSQL_TYPE_STRING;
+	params[0].buffer = (char *)keyfield;
+	params[0].buffer_length = strlen(keyfield);
+	params[0].is_null = 0;
+
+	rc = mysql_stmt_bind_param(stmt, params);	/* 绑定参数 */
+
+	result = mysql_stmt_result_metadata(stmt);
+	if (!result)
+	{
+		gw_error("mysqlGetlogin--mysql_stmt_result_metadata(), returned no meta information\n%s", mysql_stmt_error(stmt));
+		if (mysql_stmt_close(stmt))
+				gw_error("mysqlGetlogin--failed while closing the statement\n%s\n", mysql_error(&mysql));
+		return FAIL;
+	}
+
+	column_count= mysql_num_fields(result);
+	if (column_count != 2)
+	{
+		gw_error("mysqlGetlogin--invalid column count returned by MySQL.");
+		if (mysql_stmt_close(stmt))
+				gw_error("mysqlGetlogin--failed while closing the statement\n%s\n", mysql_error(&mysql));
+		return FAIL;
+	}
+
+	if (mysql_stmt_execute(stmt))
+	{
+		gw_error("mysqlGetlogin--mysql_stmt_execute(), failed\n%s", mysql_stmt_error(stmt));
+		if (mysql_stmt_close(stmt))
+				gw_error("mysqlGetlogin--failed while closing the statement\n%s\n", mysql_error(&mysql));
+		return FAIL;
+	}
+
+	MYSQL_BIND records[2];					/* 返回结果的绑定数组 */
+
+	memset_s(records, sizeof(records), 0, sizeof(records));
+
+	/* STRING COLUMN -- keyfield */
+	records[0].buffer_type = MYSQL_TYPE_STRING;
+	records[0].buffer = (char *)str_data;
+	records[0].buffer_length = STRING_SIZE;
+	records[0].is_null = &is_null[0];
+	records[0].length = &length[0];
+	records[0].error = &error[0];
+
+	/* TEXT COLUMN -- keyvalue */
+	records[1].buffer_type = MYSQL_TYPE_BLOB;
+	records[1].buffer = (char *)text_data;
+	records[1].buffer_length = TEXT_SIZE;
+	records[1].is_null = &is_null[1];
+	records[1].length = &length[1];	
+	records[1].error = &error[1];
+
+
+	/* Bind the result buffers */
+	if (mysql_stmt_bind_result(stmt, records))
+	{
+		gw_error("mysqlGetlogin--mysql_stmt_bind_result() failed\n%s\n", mysql_stmt_error(stmt));
+		if (mysql_stmt_close(stmt))
+				gw_error("mysqlGetlogin--failed while closing the statement\n%s\n", mysql_error(&mysql));
+		return FAIL;
+	}
+
+	/* Now buffer all results to client (optional step) */
+	if (mysql_stmt_store_result(stmt))
+	{
+		gw_error("mysqlGetlogin--mysql_stmt_store_result() failed\n%s\n", mysql_stmt_error(stmt));
+		if (mysql_stmt_close(stmt))
+				gw_error("mysqlGetlogin--failed while closing the statement\n%s\n", mysql_error(&mysql));
+		return FAIL;
+	}
+
+	rows = mysql_stmt_num_rows(stmt);
+	if(rows <= 0)
+	{
+		gw_warn("mysqlGetlogin--Could not find the record where the keyfield is : %s", key.c_str());
+		mysql_free_result(result);
+		if (mysql_stmt_close(stmt))
+			gw_error("mysqlGetlogin--failed while closing the statement\n%s\n", mysql_error(&mysql));
+		return FAIL;
+	}
+
+
+	/* Fetch all rows */
+	row_count= 0;
+	while (!mysql_stmt_fetch(stmt))
+	{
+		row_count++;
+		/* column 1 keyfield */
+		if (is_null[0])
+		{
+			gw_warn("mysqlGetlogin--keyfield is null!");
+			mysql_free_result(result);
+			if (mysql_stmt_close(stmt))
+				gw_error("mysqlGetlogin--failed while closing the statement\n%s\n", mysql_error(&mysql));
+			return FAIL;
+		}
+
+		/* column 2 keyvalue  */
+		if (is_null[1])
+		{
+			gw_warn("mysqlGetlogin--keyvalue is null!");
+			value="";
+		}
+		else
+			value=text_data;
+	}
+
+	mysql_free_result(result);
+
+	/* Close the statement */
+	if (mysql_stmt_close(stmt))
+	{
+		gw_error("mysqlGetlogin--failed while closing the statement\n%s\n", mysql_error(&mysql));
+		return FAIL;
+	}
+
+	if (row_count != 0 && row_count != 1 )
+	{
+		gw_error("mysqlGetlogin--MySQL failed to return all rows");
+		return FAIL;
+	}
+
+	return SUCCESS;	
+}
+
+/*
+**	set the value into login_property where keyfield is 'key'
+**	
+**	if find the 'key' is already in login_property, use update sql
+**	else use insert sql
+**
+**
+**	warnning:  this function is not available for big pdt_user and pdt_group
+**				pdt_user/pdt_group's keyvalue sometime is too big to set in this function
+*/
+int mysqlManager::mysqlSetlogin(std::string key, std::string value)
+{
+	int rc;  
+	int	rows;
+	int param_count;
+	char        str_data[STRING_SIZE];
+	char		text_data[TEXT_SIZE];
+	my_bool     is_null;
+	my_bool     error[2];
+	my_ulonglong  affected_rows;
+	unsigned long length[2];
+	char		keyfield[50]={0};
+	char		keyvalue[500]={0};
+	unsigned long field_length;
+	unsigned long value_length;
+	bool		isInsert=false;
+	string findvalue;
+	/* 设置备份 */
+	memcpy_s(keyfield, 50, key.c_str(), key.length()+1);
+	memcpy_s(keyvalue, 500, value.c_str(), value.length()+1);
+	field_length=strlen(keyfield);
+	value_length=strlen(keyvalue);
+
+	//char *query;
+	char query[1024]={'\0'};
+	memset_s(query, sizeof(query), '\0', sizeof(query));
+	int find=mysqlGetlogin(key, findvalue);
+	if( find )		//exist, update
+	{
+		isInsert=false;
+		memcpy_s(query, 1024, "update login_property set keyvalue=? where keyfield=?", sizeof("update login_property set keyvalue=? where keyfield=?"));
+		//query="update login_property set keyvalue=? where keyfield=?";
+	}else{
+		isInsert=true;
+		memcpy_s(query, 1024, "insert into login_property(keyfield,keyvalue) values(?, ?)", sizeof("insert into login_property(keyfield,keyvalue) values(?, ?)"));
+		//query="insert into login_property(keyfield,keyvalue) values(?, ?)";
+	}
+	MYSQL_STMT *stmt = mysql_stmt_init(&mysql);
+	if(0 != mysql_stmt_prepare(stmt, query, strlen(query)))
+	{
+		gw_error("mysqlSetlogin--mysqlSetlogin Run mysql_stmt_prepare failed, running sql_prepare is : %s.", query);
+		if (mysql_stmt_close(stmt))
+				gw_error("mysqlSetlogin--failed while closing the statement\n%s\n", mysql_error(&mysql));
+		return FAIL;
+	}
+
+	param_count= mysql_stmt_param_count(stmt);
+	if ( param_count != 2)
+	{
+		gw_error("mysqlSetlogin--invalid parameter count returned by MySQL");
+		if (mysql_stmt_close(stmt))
+				gw_error("mysqlSetlogin--failed while closing the statement\n%s\n", mysql_error(&mysql));
+		return FAIL;
+	}
+
+	MYSQL_BIND  params[2];
+	memset_s(params, sizeof(params), 0, sizeof(params));
+	int one, two;
+	if(isInsert)
+	{
+		one = 0;
+		two = 1;
+	}else{
+		one = 1;
+		two = 0;
+	}
+
+	params[one].buffer_type = MYSQL_TYPE_STRING;
+	params[one].buffer = (char *)keyfield;
+	params[one].buffer_length = field_length;
+	params[one].is_null = 0;
+	params[one].length = &field_length;
+
+	params[two].buffer_type = MYSQL_TYPE_BLOB;
+	params[two].buffer = (char *)keyvalue;
+	params[two].buffer_length = value_length;
+	params[two].is_null = 0;
+	params[two].length = 0;
+
+	rc = mysql_stmt_bind_param(stmt, params);	/* 绑定参数 */
+
+	/* Execute the INSERT or UPDATE statement - 1*/
+	if (mysql_stmt_execute(stmt))
+	{
+		gw_error("mysqlSetlogin--mysql_stmt_execute(), 1 failed\n%s\n", mysql_stmt_error(stmt));
+		if (mysql_stmt_close(stmt))
+				gw_error("mysqlSetlogin--failed while closing the statement\n%s\n", mysql_error(&mysql));
+		return FAIL;
+	}
+
+	/* Get the number of affected rows */
+	affected_rows= mysql_stmt_affected_rows(stmt);
+
+	if (affected_rows != 1) /* validate affected rows */
+	{
+		gw_error("mysqlSetlogin--invalid affected rows by MySQL", mysql_stmt_error(stmt));
+		if (mysql_stmt_close(stmt))
+				gw_error("mysqlSetlogin--failed while closing the statement\n%s\n", mysql_error(&mysql));
+		return FAIL;
+	}
+
+	/* Close the statement */
+	if (mysql_stmt_close(stmt))
+	{
+		gw_error("mysqlSetlogin--failed while closing the statement\n%s\n", mysql_error(&mysql));
+		return FAIL;
+	}
+
+	return SUCCESS;	
+}
